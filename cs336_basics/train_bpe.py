@@ -22,7 +22,7 @@ def train_bpe(input_path, vocab_size, special_tokens):
         2. 处理 special tokens（先按它们切开 / 去掉，不当普通文本去计 merge）
         3. 用 GPT-2 那条 regex 做 pre-tokenization，每个 pre-token → 转成 UTF-8 bytes 序列，并统计出现次数（频率表）
         4. 在频率表上做 BPE 循环：反复找最高频相邻 pair → merge → 记入 merges、更新 vocab
-        5. 返回 (vocab, merges)
+        返回 (vocab, merges)
     """
     # step1: 读取文本并初始化词表
     with open(input_path, "r", encoding="utf-8") as f:
