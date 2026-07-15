@@ -1,5 +1,6 @@
 import regex as re
 from collections import Counter
+from collections.abc import Callable
 import os
 from typing import BinaryIO
 from multiprocessing import Pool
@@ -74,7 +75,12 @@ def process_chunk(input_path, start, end, special_tokens):
                 local_counts[pre_token] += 1
         return local_counts
 
-def train_bpe(input_path, vocab_size, special_tokens):
+def train_bpe(
+    input_path,
+    vocab_size,
+    special_tokens,
+    progress_callback: Callable[[int, int], None] | None = None,
+):
     """
     输入:
         input_path: str | os.PathLike
@@ -107,6 +113,7 @@ def train_bpe(input_path, vocab_size, special_tokens):
     for idx, spec in enumerate(special_tokens):  # 初始化 special tokens
         vocab[256+idx] = spec.encode("utf-8")
     vocab_len = len(vocab)
+    total_merges = vocab_size - vocab_len
 
     # step2: 读取文件，利用给定的 find_chunk_boundaries 切分即将并行的 chunks
     with open(input_path, "rb") as f:
@@ -151,5 +158,7 @@ def train_bpe(input_path, vocab_size, special_tokens):
         vocab[vocab_len] = best_pair[0] + best_pair[1]
         vocab_len += 1
         merges.append(best_pair)
+        if progress_callback is not None:
+            progress_callback(len(merges), total_merges)
 
     return vocab, merges
