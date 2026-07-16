@@ -165,4 +165,7 @@ cython_debug/
 # Downloaded training corpora
 /data/
 
+# Local run logs and process ids
+/logs/
+
 temp/
