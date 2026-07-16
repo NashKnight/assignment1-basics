@@ -106,7 +106,7 @@ def train_bpe(
 
     优化(相比于 naive bpe):
         1. 并行处理 special tokens 和 pre_tokens
-        2. 只需要扫描一遍构建 counts，之后在 counts 上逐循环处理，而非每轮构建 pair_counts
+        2. 只需要扫描一遍构建 counts，之后在 pair_counts 上逐循环处理，而非每轮构建 pair_counts，因为每轮 pair_counts 大部分数值未更改，重建成本很大
     """
     # step1: 初始化词表
     vocab = {x: bytes([x]) for x in range(256)}  # 初始化256个字符
@@ -119,8 +119,7 @@ def train_bpe(
     with open(input_path, "rb") as f:
         num_processes = 4
         boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
-        counts = Counter()  # 统计 pre-token 的频率表
-    # 对每个 chunk 并行调用 process_chunk 处理
+    # 对每个 chunk 并行调用 process_chunk 处理，完成 step3 和 step4
     jobs = [(input_path, start, end, special_tokens) for start, end in zip(boundaries[:-1], boundaries[1:])]
     with Pool(processes=num_processes) as pool:
         # pool.map 只能应用一个参数，pool.starmap 可以让每个 worker 解包序列而接收多个参数(这里 jobs 每个元素是一个参数元组)
@@ -132,24 +131,44 @@ def train_bpe(
     
     # step5: bpe merge 循环
     merges = []
+    pair_counts = Counter()
+    # step 5.1: 只全扫描第一轮完成 pair counts 统计
+    for pre_token in counts:
+        for i in range(len(pre_token)-1):
+            pair_counts[(pre_token[i], pre_token[i+1])] += counts[pre_token]
     while vocab_len < vocab_size:
-        pair_counts = Counter()
-        # 统计
-        for pre_token in counts:
-            for idx in range(len(pre_token)-1):
-                pair_counts[(pre_token[idx], pre_token[idx+1])] += counts[pre_token]
         # 先比 pair_counts，计数相同时比 token 本身，选择字典序较大的
         best_pair = max(pair_counts, key=lambda x: (pair_counts[x], x))
-        # pre_tokens 中所有 best_pair 合并，构建新的 counts
-        new_counts = Counter()
+        # pre_tokens 中所有 best_pair 合并，构建新的 counts; 更新 pair_counts 中与 best_pair 有关的项
+        new_counts = Counter()  # 不能在循环中不断更新 counts，因为本身循环就在遍历 counts，此时不允许修改 counts，只能新建 new_counts 再重新赋值
         for pre_token in counts:
             i = 0
             new_pre_token = []  # 新的合并后的 pre_token
-            while i < len(pre_token):
-                if i < len(pre_token)-1 and (pre_token[i], pre_token[i+1]) == best_pair:  # 遇到 best_pair
-                    new_pre_token.append(best_pair[0] + best_pair[1])  # 添加 best_pair 的 bytes 形式(bytes 相加等价于字符拼接)
+            length = len(pre_token)
+            while i < length:
+                if i < length-1 and (pre_token[i], pre_token[i+1]) == best_pair:  # 遇到 best_pair
+                    """
+                    pair_counts 更新规则，每次更新计数变化量是当前 pre_token 的频率 freq = counts[pre_token]：
+                    1. 如果位置 i 前面还有 bytes，left = new_pre_token[-1]
+                        (left, pre_token[i] + pre_token[i+1]) 的计数 + freq，(left, pre_token[i]) 的计数 - freq
+                    2. 如果位置 i+1 后面还有 bytes，right = pre_token[i+2]
+                        (pre_token[i] + pre_token[i+1], right) 的计数 + freq，(pre_token[i+1], right) 的计数 - freq
+                    3. (pre_token[i], pre_token[i+1]) 计数 - freq
+                    """
+                    freq = counts[pre_token]
+                    if new_pre_token:  # 如果位置 i 前面还有 bytes，那么 new_pre_token 就非空
+                        left = new_pre_token[-1]  # 非常容易错：这里不是 pre_token[i-1]，因为前面可能恰巧 best_pair 刚合并完
+                        pair_counts[(left, pre_token[i] + pre_token[i+1])] += freq
+                        pair_counts[(left, pre_token[i])] -= freq
+                    if i < length-2:  # 如果位置 i+1 后面还有 bytes
+                        right = pre_token[i+2]
+                        pair_counts[(pre_token[i] + pre_token[i+1], right)] += freq
+                        pair_counts[(pre_token[i+1], right)] -= freq
+                    pair_counts[(pre_token[i], pre_token[i+1])] -= freq
+                    # 添加 best_pair 的 bytes 形式(bytes 相加等价于字符拼接)，必须先更新 pair_counts 再添加 best_pair，否则第一个条件分支取做邻居会出错
+                    new_pre_token.append(best_pair[0] + best_pair[1])
                     i += 2
-                else:
+                else:  # 没遇到 best_pair 就复制原位置的 bytes
                     new_pre_token.append(pre_token[i])
                     i += 1
             new_counts[tuple(new_pre_token)] += counts[pre_token]  # 频率复制
