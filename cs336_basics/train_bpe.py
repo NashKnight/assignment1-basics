@@ -5,6 +5,9 @@ import os
 from typing import BinaryIO
 from multiprocessing import Pool
 
+NUM_PROCESSES = 4
+NUM_CHUNKS = 64
+
 def find_chunk_boundaries(
     file: BinaryIO,
     desired_num_chunks: int,
@@ -117,8 +120,9 @@ def train_bpe(
 
     # step2: 读取文件，利用给定的 find_chunk_boundaries 切分即将并行的 chunks
     with open(input_path, "rb") as f:
-        num_processes = 4
-        boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
+        num_processes = NUM_PROCESSES
+        num_chunks = NUM_CHUNKS
+        boundaries = find_chunk_boundaries(f, num_chunks, b"<|endoftext|>")
     # 对每个 chunk 并行调用 process_chunk 处理，完成 step3 和 step4
     jobs = [(input_path, start, end, special_tokens) for start, end in zip(boundaries[:-1], boundaries[1:])]
     with Pool(processes=num_processes) as pool:

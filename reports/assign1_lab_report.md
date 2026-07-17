@@ -46,14 +46,14 @@ nohup bash -lc 'source /root/.local/bin/env && uv run python scripts/train_bpe_d
 
 ## Problem: train_bpe
 
-我在 `cs336_basics/train_bpe.py` 中实现了 `train_bpe(input_path, vocab_size, special_tokens)`：它返回 `dict[int, bytes]` 形式的 vocab 和按生成顺序排列的 `list[tuple[bytes, bytes]]` merges；训练时会把 special tokens 当作硬边界处理，使用 GPT-2 风格的正则表达式做 pre-tokenization，并支持给实验脚本使用的进度回调。当前针对 `tests/test_train_bpe.py` 的结果是：`test_train_bpe` 和 `test_train_bpe_special_tokens` 通过，`test_train_bpe_speed` 还需要继续优化（小 fixture 上约 `2.85s`，测试阈值是 `1.5s`）。
+我在 `cs336_basics/train_bpe.py` 中实现了 `train_bpe(input_path, vocab_size, special_tokens)`：它返回 `dict[int, bytes]` 形式的 vocab 和按生成顺序排列的 `list[tuple[bytes, bytes]]` merges；训练时会把 special tokens 当作硬边界处理，使用 GPT-2 风格的正则表达式做 pre-tokenization，并支持给实验脚本使用的进度回调。当前针对 `tests/test_train_bpe.py` 的三个测试均已通过，包括 `test_train_bpe_speed`、`test_train_bpe` 和 `test_train_bpe_special_tokens`。
 
 ## Problem: train_bpe_tinystories
 
 ### (a)
 
-我在 TinyStories 上训练了一个 byte-level BPE tokenizer，最大词表大小为 10,000，并把 `<|endoftext|>` 加入为 special token。词表和 merges 已经序列化到 `artifacts/bpe_training_results.jsonl`；训练总耗时为 `25:36.48`，峰值常驻内存为 `3458572 KB`（约 `3.3 GiB`），词表中最长的 token 是 `b' accomplishment'`，长度为 15 bytes，解码后是 `' accomplishment'`。这个结果是合理的，因为 TinyStories 中常见英文词片段，尤其是带前导空格的词，会因为频率较高而被 BPE 合并成单个 token。
+我在 TinyStories 上训练了一个 byte-level BPE tokenizer，最大词表大小为 10,000，并把 `<|endoftext|>` 加入为 special token。词表和 merges 已经序列化到 `artifacts/bpe_training_results.jsonl`；优化版训练总耗时为 `18:23.29`，峰值常驻内存为 `3459356 KB`（约 `3.3 GiB`），词表中最长的 token 是 `b' accomplishment'`，长度为 15 bytes，解码后是 `' accomplishment'`。这个结果是合理的，因为 TinyStories 中常见英文词片段，尤其是带前导空格的词，会因为频率较高而被 BPE 合并成单个 token。
 
 ### (b)
 
-当前 tokenizer 训练中最慢的部分是 BPE merge loop。具体来说，每一轮 merge 都会在当前所有 pre-token 上重新统计相邻 pair 的频率，并重建 `counts` 表；这种重复扫描主导了整体运行时间。
+当前 tokenizer 训练中最慢的部分仍然是 BPE merge 阶段；优化版已经避免每轮完全重建 `pair_counts`，但每一轮仍需要扫描当前所有 pre-token、应用最佳 merge 并重建 `counts` 表，所以主要时间仍花在 merge loop 上。
