@@ -1,16 +1,17 @@
 """
-bpe version 3:
+bpe version 2:
     增加优化：
-        新建 pair_index 保存 pair 曾出现过的 pre-tokens 集合
-重要的中间字典结构：
+        1. 并行处理：special tokens 切分和 pre-tokens 预处理
+        2. 合并循环中只创建一次 pair_counts，动态修改
+    重要的中间字典结构：
         1. counts: key = pre-tokens, value = 对应 pre_token 的频率
-        2. pair_counts: key = byte pair，value = 对应 pair 的频率
-        3. pair_index: key = byte pair，value = 对应 pair 存在于哪些 pre-tokens 中（集合）
+        2. pair_counts: key = bytes 组合 (tokens)， value = 对应 token 的频率
+    测试通过，可训练 TinyStories，但训练 OpenWebText 超时
 """
 
 import regex as re
-from collections import Counter, defaultdict
-from collections.abc import Callable  # 用于进度条回调的类型标注
+from collections import Counter
+from collections.abc import Callable
 import os
 from typing import BinaryIO
 from multiprocessing import Pool
@@ -92,7 +93,7 @@ def train_bpe(
     input_path,
     vocab_size,
     special_tokens,
-    progress_callback: Callable[[int, int], None] | None = None,  # 用于进度条显示；训练脚本可传入 tqdm 更新函数
+    progress_callback: Callable[[int, int], None] | None = None,
 ):
     """
     输入:
@@ -117,15 +118,16 @@ def train_bpe(
         5. 在频率表上做 BPE 循环：反复找最高频相邻 pair → merge → 记入 merges、更新 vocab
         返回 (vocab, merges)
 
-    优化(相比于 bpe v2):
-        1. 构建 pair_index，每次不再遍历整个 counts 去找有 best_pair 的 pre_token，直接从 pair_index 取
+    优化(相比于 bpe v1):
+        1. 并行处理 special tokens 和 pre_tokens
+        2. 只需要扫描一遍构建 counts，之后在 pair_counts 上逐循环处理，而非每轮构建 pair_counts，因为每轮 pair_counts 大部分数值未更改，重建成本很大
     """
     # step1: 初始化词表
     vocab = {x: bytes([x]) for x in range(256)}  # 初始化256个字符
     for idx, spec in enumerate(special_tokens):  # 初始化 special tokens
         vocab[256+idx] = spec.encode("utf-8")
     vocab_len = len(vocab)
-    total_merges = vocab_size - vocab_len  # 用于进度条显示：预计总 merge 次数
+    total_merges = vocab_size - vocab_len
 
     # step2: 读取文件，利用给定的 find_chunk_boundaries 切分即将并行的 chunks
     with open(input_path, "rb") as f:
@@ -145,20 +147,17 @@ def train_bpe(
     # step5: bpe merge 循环
     merges = []
     pair_counts = Counter()
-    pair_index = defaultdict(set)  # key 是 byte pair 元组，value 是 pre-tokens 集合，默认空集
     # step 5.1: 只全扫描第一轮完成 pair counts 统计
     for pre_token in counts:
         for i in range(len(pre_token)-1):
-            pair = (pre_token[i], pre_token[i+1])
-            pair_counts[pair] += counts[pre_token]
-            pair_index[pair].add(pre_token)
+            pair_counts[(pre_token[i], pre_token[i+1])] += counts[pre_token]
     # step 5.2: 合并循环
     while vocab_len < vocab_size:
         # 先比 pair_counts，计数相同时比 token 本身，选择字典序较大的
         best_pair = max(pair_counts, key=lambda x: (pair_counts[x], x))
-        best_pair_index = pair_index[best_pair].copy()  # 保存一份快照用于循环遍历，因为下面循环遍历 pair_index 时需要 remove
-        # 不再遍历 pre_token 找 best_pair，直接访问 pair_index 得到含有 best_pair 的所有 pre-token
-        for pre_token in best_pair_index:
+        # pre_tokens 中所有 best_pair 合并，构建新的 counts; 更新 pair_counts 中与 best_pair 有关的项
+        new_counts = Counter()  # 不能在循环中不断更新 counts，因为本身循环就在遍历 counts，此时不允许修改 counts，只能新建 new_counts 再重新赋值
+        for pre_token in counts:
             i = 0
             new_pre_token = []  # 新的合并后的 pre_token
             length = len(pre_token)
@@ -188,22 +187,12 @@ def train_bpe(
                 else:  # 没遇到 best_pair 就复制原位置的 bytes
                     new_pre_token.append(pre_token[i])
                     i += 1
-            new_pre_token = tuple(new_pre_token)  # new_pre_token list 转 tuple
-            counts[new_pre_token] += counts[pre_token]  # 频率复制
-            del counts[pre_token]  # 这里循环不再是遍历 counts，可以直接更改 counts
-            # 遍历 new_pre_token 中所有的 pair 更新 pair_index
-            for i in range(len(new_pre_token)-1):
-                pair = (new_pre_token[i], new_pre_token[i+1])
-                pair_index[pair].add(new_pre_token)
-            # 删除所有含有旧的 pre-token 的 pair_index
-            for i in range(len(pre_token)-1):
-                pair = (pre_token[i], pre_token[i+1])
-                pair_index[pre_token[i], pre_token[i+1]].discard(pre_token)
+            new_counts[tuple(new_pre_token)] += counts[pre_token]  # 频率复制
+        counts = new_counts
         # 更新 vocab 和 merged
         vocab[vocab_len] = best_pair[0] + best_pair[1]
         vocab_len += 1
         merges.append(best_pair)
-        # 用于进度条显示：每完成一次 merge 回调一次（已完成数, 总数）
         if progress_callback is not None:
             progress_callback(len(merges), total_merges)
 

@@ -1,3 +1,11 @@
+"""
+bpe version 1:
+    完成 bpe 基础架构，暂未有任何优化，速度测试无法通过，其他测试通过
+    重要的中间字典结构：
+        1. counts: key = pre-tokens, value = 对应 pre_token 的频率
+        2. pair_counts: key = bytes 组合 (tokens)， value = 对应 token 的频率
+"""
+
 import regex as re
 from collections import Counter
 
