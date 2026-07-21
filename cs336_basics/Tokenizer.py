@@ -1,4 +1,6 @@
 import regex as re
+import base64
+import json
 
 class Tokenizer:
     def __init__(self, vocab, merges, special_tokens=None):
@@ -9,9 +11,47 @@ class Tokenizer:
         self.token_rank = {v: k for k, v in self.vocab.items()}  # key=token, value=id
         self.merge_rank = {merge: i for i, merge in enumerate(self.merges)}  # key=merges, value=idx
 
+    @classmethod  # from_files 要在没有实例的时候创建一个实例，不能依赖 self，因此需要 @classmethod 自动把 Tokenizer 类传给第一个参数 cls
     def from_files(cls, vocab_filepath, merges_filepath, special_tokens=None):
-        # 自己训练 llm 的时候才会用到
-        pass
+        """
+        输入：
+            vocab_filepath: str，保存 vocab 的文件路径
+            merges_filepath: str，保存 merges 的文件路径
+            special_tokens: list[str]，需要整体保留的特殊 token
+        输出：
+            return: Tokenizer，根据文件中保存的 vocab 和 merges 构造出的 tokenizer
+
+        流程：
+            1. 读取 vocab 文件，还原 token_id -> bytes 的映射
+            2. 读取 merges 文件，还原按 rank 排序的 (bytes, bytes) merge 列表
+            3. 调用 Tokenizer(vocab, merges, special_tokens) 构造实例
+        """
+        # step1: 从 vocab 文件读取 token_id -> bytes
+        vocab = {}
+        with open(vocab_filepath, encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():  # 空行
+                    continue
+                record = json.loads(line)
+                if record["record_type"] == "vocab":
+                    # json 保存时不能保存任意 bytes 对象，因此训练时保存了 base64 编码 (注意 bpe merge 以后是可能产生不完整的 utf-8 片段的，这些片段无法直接解码成 Unicode 写入 json 中)
+                    vocab[int(record["token_id"])] = base64.b64decode(record["bytes_base64"])
+
+        # step2: 从 merges 文件读取按训练顺序排列的 merge pair
+        merges = []
+        with open(merges_filepath, encoding="utf-8") as f:
+            records = [json.loads(line) for line in f if line.strip()]
+            for record in sorted(records, key=lambda x: int(x["rank"])):
+                if record["record_type"] == "merge":
+                    merges.append(
+                        (
+                            base64.b64decode(record["left_base64"]),
+                            base64.b64decode(record["right_base64"]),
+                        )
+                    )
+
+        # step3: 返回用文件内容构造出的 Tokenizer 实例
+        return cls(vocab, merges, special_tokens)
 
     def encode(self, text):
         """
@@ -90,6 +130,7 @@ class Tokenizer:
             ids = self.encode(chunk)
             for id in ids:
                 yield id
+                
 
     def decode(self, ids):
         """

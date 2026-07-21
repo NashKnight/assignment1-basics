@@ -1,0 +1,245 @@
+{
+  "compression": [
+    {
+      "bytes_per_token": 4.112278761061947,
+      "dataset": "tinystories",
+      "documents": [
+        {
+          "bytes": 740,
+          "bytes_per_token": 4.228571428571429,
+          "document_index": 0,
+          "tokens": 175
+        },
+        {
+          "bytes": 663,
+          "bytes_per_token": 4.0426829268292686,
+          "document_index": 1,
+          "tokens": 164
+        },
+        {
+          "bytes": 515,
+          "bytes_per_token": 4.0234375,
+          "document_index": 2,
+          "tokens": 128
+        },
+        {
+          "bytes": 859,
+          "bytes_per_token": 4.427835051546392,
+          "document_index": 3,
+          "tokens": 194
+        },
+        {
+          "bytes": 956,
+          "bytes_per_token": 4.17467248908297,
+          "document_index": 4,
+          "tokens": 229
+        },
+        {
+          "bytes": 680,
+          "bytes_per_token": 4.023668639053255,
+          "document_index": 5,
+          "tokens": 169
+        },
+        {
+          "bytes": 626,
+          "bytes_per_token": 3.8641975308641974,
+          "document_index": 6,
+          "tokens": 162
+        },
+        {
+          "bytes": 441,
+          "bytes_per_token": 3.972972972972973,
+          "document_index": 7,
+          "tokens": 111
+        },
+        {
+          "bytes": 1083,
+          "bytes_per_token": 4.026022304832714,
+          "document_index": 8,
+          "tokens": 269
+        },
+        {
+          "bytes": 872,
+          "bytes_per_token": 4.21256038647343,
+          "document_index": 9,
+          "tokens": 207
+        }
+      ],
+      "num_documents": 10,
+      "tokenizer": "tinystories",
+      "total_bytes": 7435,
+      "total_tokens": 1808
+    },
+    {
+      "bytes_per_token": 4.691150178784267,
+      "dataset": "owt",
+      "documents": [
+        {
+          "bytes": 4598,
+          "bytes_per_token": 4.459747817652764,
+          "document_index": 0,
+          "tokens": 1031
+        },
+        {
+          "bytes": 2449,
+          "bytes_per_token": 4.9574898785425106,
+          "document_index": 1,
+          "tokens": 494
+        },
+        {
+          "bytes": 2027,
+          "bytes_per_token": 4.638443935926773,
+          "document_index": 2,
+          "tokens": 437
+        },
+        {
+          "bytes": 3174,
+          "bytes_per_token": 4.514935988620199,
+          "document_index": 3,
+          "tokens": 703
+        },
+        {
+          "bytes": 4674,
+          "bytes_per_token": 5.036637931034483,
+          "document_index": 4,
+          "tokens": 928
+        },
+        {
+          "bytes": 3577,
+          "bytes_per_token": 4.94060773480663,
+          "document_index": 5,
+          "tokens": 724
+        },
+        {
+          "bytes": 1085,
+          "bytes_per_token": 4.465020576131687,
+          "document_index": 6,
+          "tokens": 243
+        },
+        {
+          "bytes": 900,
+          "bytes_per_token": 4.591836734693878,
+          "document_index": 7,
+          "tokens": 196
+        },
+        {
+          "bytes": 6654,
+          "bytes_per_token": 4.495945945945946,
+          "document_index": 8,
+          "tokens": 1480
+        },
+        {
+          "bytes": 2349,
+          "bytes_per_token": 4.934873949579832,
+          "document_index": 9,
+          "tokens": 476
+        }
+      ],
+      "num_documents": 10,
+      "tokenizer": "owt",
+      "total_bytes": 31487,
+      "total_tokens": 6712
+    },
+    {
+      "bytes_per_token": 3.1892028765319558,
+      "dataset": "owt",
+      "documents": [
+        {
+          "bytes": 4598,
+          "bytes_per_token": 3.378398236590742,
+          "document_index": 0,
+          "tokens": 1361
+        },
+        {
+          "bytes": 2449,
+          "bytes_per_token": 3.2351387054161163,
+          "document_index": 1,
+          "tokens": 757
+        },
+        {
+          "bytes": 2027,
+          "bytes_per_token": 3.142635658914729,
+          "document_index": 2,
+          "tokens": 645
+        },
+        {
+          "bytes": 3174,
+          "bytes_per_token": 3.6109215017064846,
+          "document_index": 3,
+          "tokens": 879
+        },
+        {
+          "bytes": 4674,
+          "bytes_per_token": 3.248088950660181,
+          "document_index": 4,
+          "tokens": 1439
+        },
+        {
+          "bytes": 3577,
+          "bytes_per_token": 3.1767317939609234,
+          "document_index": 5,
+          "tokens": 1126
+        },
+        {
+          "bytes": 1085,
+          "bytes_per_token": 3.4012539184952977,
+          "document_index": 6,
+          "tokens": 319
+        },
+        {
+          "bytes": 900,
+          "bytes_per_token": 2.830188679245283,
+          "document_index": 7,
+          "tokens": 318
+        },
+        {
+          "bytes": 6654,
+          "bytes_per_token": 2.89556135770235,
+          "document_index": 8,
+          "tokens": 2298
+        },
+        {
+          "bytes": 2349,
+          "bytes_per_token": 3.213406292749658,
+          "document_index": 9,
+          "tokens": 731
+        }
+      ],
+      "num_documents": 10,
+      "tokenizer": "tinystories",
+      "total_bytes": 31487,
+      "total_tokens": 9873
+    }
+  ],
+  "created_at_utc": "2026-07-20T06:05:23.041330+00:00",
+  "num_documents": 10,
+  "sample_strategy": "first",
+  "seed": 0,
+  "special_tokens": [
+    "<|endoftext|>"
+  ],
+  "throughput": [
+    {
+      "bytes_per_second": 1005990.051877646,
+      "corpus_path": "/user/hongchenye/CS336-assignments/assignment1-basics/data/TinyStoriesV2-GPT4-train.txt",
+      "dataset": "tinystories",
+      "elapsed_seconds": 0.994045615196228,
+      "input_bytes": 1000000,
+      "pile_825gb_hours": 227.8021201491356,
+      "pile_825gb_seconds": 820087.6325368881,
+      "tokenizer": "tinystories",
+      "tokens": 243500
+    },
+    {
+      "bytes_per_second": 813004.0496912707,
+      "corpus_path": "/user/hongchenye/CS336-assignments/assignment1-basics/data/owt_train.txt",
+      "dataset": "owt",
+      "elapsed_seconds": 1.2300061732530594,
+      "input_bytes": 1000000,
+      "pile_825gb_hours": 281.87641470382613,
+      "pile_825gb_seconds": 1014755.092933774,
+      "tokenizer": "owt",
+      "tokens": 223815
+    }
+  ]
+}
