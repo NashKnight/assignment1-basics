@@ -11,8 +11,8 @@ from torch import Tensor
 
 from cs336_basics.train_bpe import train_bpe
 from cs336_basics.Tokenizer import Tokenizer
-from cs336_basics.model import Linear, Embedding, RMSNorm, SwiGLU
-from cs336_basics.model import silu
+from cs336_basics.model import Linear, Embedding, RMSNorm, SwiGLU, RoPE, MultiheadSelfAttention
+from cs336_basics.model import silu, softmax, scaled_dot_product_attention
 
 
 def run_linear(
@@ -93,7 +93,13 @@ def run_swiglu(
     # swiglu.w2.weight.data = w2_weight
     # swiglu.w3.weight.data = w3_weight
     swiglu = SwiGLU(d_model, d_ff)
-    swiglu.load_state_dict({"w1.weight": w1_weight, "w2.weight": w2_weight, "w3.weight": w3_weight})  # 这里调用了 Linear，因此 key 是 Linear.weight
+    swiglu.load_state_dict(
+        {
+            "w1.weight": w1_weight, 
+            "w2.weight": w2_weight, 
+            "w3.weight": w3_weight},
+        
+    )  # 这里调用了 Linear，因此 key 是 Linear.weight
     return swiglu(in_features)
 
 
@@ -115,7 +121,7 @@ def run_scaled_dot_product_attention(
     Returns:
         Float[Tensor, " ... queries d_v"]: Output of SDPA
     """
-    raise NotImplementedError
+    return scaled_dot_product_attention(Q, K, V, mask)
 
 
 def run_multihead_self_attention(
@@ -149,7 +155,16 @@ def run_multihead_self_attention(
         Float[Tensor, " ... sequence_length d_model"]: Tensor with the output of running your optimized, batched multi-headed attention
         implementation with the given QKV projection weights and input features.
     """
-    raise NotImplementedError
+    attn = MultiheadSelfAttention(d_model, num_heads)
+    attn.load_state_dict(
+        {
+            "q_proj.weight": q_proj_weight,
+            "k_proj.weight": k_proj_weight,
+            "v_proj.weight": v_proj_weight,
+            "o_proj.weight": o_proj_weight,
+        }
+    )
+    return attn(in_features)
 
 
 def run_multihead_self_attention_with_rope(
@@ -189,7 +204,17 @@ def run_multihead_self_attention_with_rope(
         Float[Tensor, " ... sequence_length d_model"]: Tensor with the output of running your optimized, batched multi-headed attention
         implementation with the given QKV projection weights and input features.
     """
-    raise NotImplementedError
+    attn = MultiheadSelfAttention(d_model, num_heads, theta, max_seq_len)
+    attn.load_state_dict(
+        {
+            "q_proj.weight": q_proj_weight,
+            "k_proj.weight": k_proj_weight,
+            "v_proj.weight": v_proj_weight,
+            "o_proj.weight": o_proj_weight,
+        },
+        strict=False,  # state_dict 的 key 不必和模型参数完全对应，这里 rope 的两个 buffer 是不设置权重的，必须忽略，否则会 missing keys
+    )
+    return attn(in_features, token_positions)
 
 
 def run_rope(
@@ -211,7 +236,8 @@ def run_rope(
     Returns:
         Float[Tensor, " ... sequence_length d_k"]: Tensor with RoPEd input.
     """
-    raise NotImplementedError
+    rope = RoPE(theta, d_k, max_seq_len)
+    return rope(in_query_or_key, token_positions)
 
 
 def run_transformer_block(
@@ -444,7 +470,7 @@ def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, "
         Float[Tensor, "..."]: Tensor of with the same shape as `in_features` with the output of
         softmax normalizing the specified `dim`.
     """
-    raise NotImplementedError
+    return softmax(in_features, dim)
 
 
 def run_cross_entropy(
