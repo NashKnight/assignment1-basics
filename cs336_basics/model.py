@@ -146,25 +146,27 @@ def softmax(x, dim):
 
 def scaled_dot_product_attention(Q, K, V, mask=None):
     """
-    Q: torch.Tensor (batch, ..., seq_q, d_k)
-    K: torch.Tensor (batch, ..., seq_k, d_k)
-    V: torch.Tensor (batch, ..., seq_k, d_v)
+    Q: torch.Tensor (..., seq_q, d_k)
+    K: torch.Tensor (..., seq_k, d_k)
+    V: torch.Tensor (..., seq_k, d_v)
     mask: torch.Tensor (..., seq_q, seq_k)
     """
     d_k = Q.size(-1)
-    scores = Q @ K.transpose(-2, -1) / math.sqrt(d_k)  # (batch, ..., seq_q, seq_k)
+    scores = Q @ K.transpose(-2, -1) / math.sqrt(d_k)  # (..., seq_q, seq_k)
     if mask is not None:  # 注意整个课程中定义 mask=True 为要保留的位置， False 是需要 mask 的位置
-        scores = scores.masked_fill(~mask, float("-inf"))  # (batch, ..., seq_q, seq_k)
-    attn_weights = softmax(scores, dim=-1)  # (batch, ..., seq_q, seq_k)
-    return attn_weights @ V  # (batch, ..., seq_q, d_v)
+        scores = scores.masked_fill(~mask, float("-inf"))  # (..., seq_q, seq_k)
+    attn_weights = softmax(scores, dim=-1)  # (..., seq_q, seq_k)
+    return attn_weights @ V  # (..., seq_q, d_v)
 
 class MultiheadSelfAttention(nn.Module):
-    def __init__(self, d_model, num_heads, theta=None, max_seq_len=None):
+    def __init__(self, d_model, num_heads, theta=None, max_seq_len=None, device=None, dtype=None):
         """
         d_model: int
         num_heads: int
         theta: float
-        max_seq: int
+        max_seq_len: int
+        device: torch.device | None = None
+        dtype: torch.dtype | None = None
         """
         super().__init__()
         assert d_model % num_heads == 0
@@ -172,14 +174,14 @@ class MultiheadSelfAttention(nn.Module):
         self.d_model = d_model
         self.num_heads = num_heads
         self.d_k, self.d_v = d_model // num_heads, d_model // num_heads
-        self.q_proj = Linear(d_model, d_model)  # (d_model, d_model)
-        self.k_proj = Linear(d_model, d_model)  # (d_model, d_model) 
-        self.v_proj = Linear(d_model, d_model)  # (d_model, d_model)
-        self.o_proj = Linear(d_model, d_model)  # (d_model, d_model)
+        self.q_proj = Linear(d_model, d_model, device=device, dtype=dtype)  # (d_model, d_model)
+        self.k_proj = Linear(d_model, d_model, device=device, dtype=dtype)  # (d_model, d_model)
+        self.v_proj = Linear(d_model, d_model, device=device, dtype=dtype)  # (d_model, d_model)
+        self.output_proj = Linear(d_model, d_model, device=device, dtype=dtype)  # (d_model, d_model)
 
         self.rope = None
         if theta is not None and max_seq_len is not None:
-            self.rope = RoPE(theta, self.d_k, max_seq_len)
+            self.rope = RoPE(theta, self.d_k, max_seq_len, device=device)
 
     def forward(self, x, token_positions=None):
         """
@@ -210,4 +212,64 @@ class MultiheadSelfAttention(nn.Module):
         # 计算点积自注意力
         out = scaled_dot_product_attention(Q, K, V, causal_mask)  # (..., num_heads, seq, d_v)
         out = out.transpose(-3, -2).contiguous().view(*leading, seq, self.d_model)  # (..., seq, d_model)
-        return self.o_proj(out)  # (..., seq_, d_model)
+        return self.output_proj(out)  # (..., seq, d_model)
+
+class TransformerBlock(nn.Module):
+    def __init__(self, d_model, num_heads, d_ff, theta=None, max_seq_len=None, device=None, dtype=None):
+        """
+        d_model: int
+        num_heads: int
+        d_ff: int
+        theta: float
+        max_seq_len: int
+        device: torch.device | None = None
+        dtype: torch.dtype | None = None
+        """
+        super().__init__()
+        self.ln1 = RMSNorm(d_model, device=device, dtype=dtype)
+        self.ln2 = RMSNorm(d_model, device=device, dtype=dtype)
+        self.ffn = SwiGLU(d_model, d_ff, device=device, dtype=dtype)
+        self.attn = MultiheadSelfAttention(d_model, num_heads, theta=theta, max_seq_len=max_seq_len, device=device, dtype=dtype)
+    
+    def forward(self, x, token_positions=None):
+        """
+        x: torch.Tensor (..., seq, d_model)
+        token_positions: torch.Tensor (..., seq)
+        """
+        if token_positions is None:
+            token_positions = torch.arange(x.size(-2), device=x.device)
+        x = x + self.attn(self.ln1(x), token_positions)
+        x = x + self.ffn(self.ln2(x))
+        return x
+
+class Transformer(nn.Module):
+    def __init__(self, d_model, num_heads, d_ff, vocab_size, context_length, num_layers, theta=None, device=None, dtype=None):
+        """
+        d_model: int
+        num_heads: int
+        d_ff: int
+        vocab_size: int
+        context_length: int
+        num_layers: int
+        theta: float
+        device: torch.device | None = None
+        dtype: torch.dtype | None = None
+        """
+        super().__init__()
+        self.token_embeddings = Embedding(vocab_size, d_model, device=device, dtype=dtype)
+        self.layers = nn.ModuleList([
+            TransformerBlock(d_model, num_heads, d_ff, theta=theta, max_seq_len=context_length, device=device, dtype=dtype) for _ in range(num_layers)
+        ])
+        self.ln_final = RMSNorm(d_model, device=device, dtype=dtype)
+        self.lm_head = Linear(d_model, vocab_size, device=device, dtype=dtype)
+
+    def forward(self, x, token_positions=None):
+        """
+        x: torch.Tensor (..., seq)  # token ids
+        token_positions: torch.Tensor (..., seq) | None
+        returns: torch.Tensor (..., seq, vocab_size)
+        """
+        x = self.token_embeddings(x)  # (..., seq, d_model)
+        for layer in self.layers:
+            x = layer(x, token_positions)  # (..., seq, d_model)
+        return self.lm_head(self.ln_final(x))  # (..., seq, vocab_size)
